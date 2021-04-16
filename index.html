@@ -155,6 +155,72 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
+    <link itemprop="mainEntityOfPage" href="https://lyj7890.github.io/2021/04/16/23-05-50/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="木子">
+      <meta itemprop="description" content="DevOpser，enjoy">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="夜下听雨">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2021/04/16/23-05-50/" class="post-title-link" itemprop="url">rook-ceph集群中cephfs无法扩容</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+              
+
+              <time title="Created: 2021-04-16 23:05:50 / Modified: 23:21:09" itemprop="dateCreated datePublished" datetime="2021-04-16T23:05:50+08:00">2021-04-16</time>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>在公司k8s集群上部署了ceph提供对象存储和文件存储服务，按照rook官方文档一步一步安装，但是部署完成之后测试发现文件存储无法扩容成功。记录了排查过程及解决方案。  </p>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2021/04/16/23-05-50/#more" rel="contents">
+                Read more &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
     <link itemprop="mainEntityOfPage" href="https://lyj7890.github.io/2021/03/15/23-28-27/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -547,7 +613,7 @@
       <header class="post-header">
         <h2 class="post-title" itemprop="name headline">
           
-            <a href="/2021/03/11/22-21-59/" class="post-title-link" itemprop="url">One Page</a>
+            <a href="/2021/03/11/22-21-59/" class="post-title-link" itemprop="url">hexo 部署到 git</a>
         </h2>
 
         <div class="post-meta">
@@ -559,6 +625,13 @@
 
               <time title="Created: 2021-03-11 22:21:59" itemprop="dateCreated datePublished" datetime="2021-03-11T22:21:59+08:00">2021-03-11</time>
             </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="far fa-calendar-check"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2021-04-16 23:26:49" itemprop="dateModified" datetime="2021-04-16T23:26:49+08:00">2021-04-16</time>
+              </span>
 
           
 
@@ -571,7 +644,10 @@
     <div class="post-body" itemprop="articleBody">
 
       
-          
+          <h4 id="hexo-部署到-Github-命令"><a href="#hexo-部署到-Github-命令" class="headerlink" title="hexo 部署到 Github 命令"></a>hexo 部署到 Github 命令</h4><p>hexo clean  //清除之前生成的东西</p>
+<p>hexo generate  //生成静态文件，简写 <code>hexo g</code></p>
+<p>hexo deploy  //部署文章，简写<code>hexo d</code>, 需要提前配置_config.yaml文件及下载hexo-deployer-git插件</p>
+
       
     </div>
 
@@ -724,7 +800,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">8</span>
+          <span class="site-state-item-count">9</span>
           <span class="site-state-item-name">posts</span>
         </a>
       </div>

@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 5.4.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"lyj7890.github.io","root":"/","scheme":"Mist","version":"7.8.0","exturl":false,"sidebar":{"position":"right","display":"always","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":false,"show_result":false,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="在公司k8s集群上部署了ceph提供对象存储和文件存储服务，按照rook官方文档一步一步安装，但是部署完成之后测试发现文件存储无法扩容成功。记录了排查过程及解决方案。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="rook-ceph集群中cephfs无法扩容">
+<meta property="og:url" content="https://lyj7890.github.io/2021/04/16/23-05-50/index.html">
+<meta property="og:site_name" content="夜下听雨">
+<meta property="og:description" content="在公司k8s集群上部署了ceph提供对象存储和文件存储服务，按照rook官方文档一步一步安装，但是部署完成之后测试发现文件存储无法扩容成功。记录了排查过程及解决方案。">
+<meta property="og:locale">
+<meta property="article:published_time" content="2021-04-16T15:05:50.000Z">
+<meta property="article:modified_time" content="2021-04-16T15:21:09.679Z">
+<meta property="article:author" content="木子">
+<meta name="twitter:card" content="summary">
+
+<link rel="canonical" href="https://lyj7890.github.io/2021/04/16/23-05-50/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-Hans'
+  };
+</script>
+
+  <title>rook-ceph集群中cephfs无法扩容 | 夜下听雨</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">夜下听雨</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+      <p class="site-subtitle" itemprop="description">记录、总结；生活、学习！</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories</a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>Archives</a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+  <a href="https://github.com/yourname" class="github-corner" title="Follow me on GitHub" aria-label="Follow me on GitHub" rel="noopener" target="_blank"><svg width="80" height="80" viewBox="0 0 250 250" aria-hidden="true"><path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-Hans">
+    <link itemprop="mainEntityOfPage" href="https://lyj7890.github.io/2021/04/16/23-05-50/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="木子">
+      <meta itemprop="description" content="DevOpser，enjoy">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="夜下听雨">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          rook-ceph集群中cephfs无法扩容
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+              
+
+              <time title="Created: 2021-04-16 23:05:50 / Modified: 23:21:09" itemprop="dateCreated datePublished" datetime="2021-04-16T23:05:50+08:00">2021-04-16</time>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p>在公司k8s集群上部署了ceph提供对象存储和文件存储服务，按照rook官方文档一步一步安装，但是部署完成之后测试发现文件存储无法扩容成功。记录了排查过程及解决方案。  </p>
+<span id="more"></span>
+
+
+<h4 id="问题现象"><a href="#问题现象" class="headerlink" title="问题现象"></a>问题现象</h4><p>使用 rook 部署 ceph 集群，部署成功后测试 cephfs 的扩容功能，修改 pvc，将容量增大，发现无法扩容成功。日志如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"># kubectl -n rook-ceph logs --tail 10 csi-cephfsplugin-provisioner-55db45f9db-nbk82 -c csi-resizer</span><br><span class="line">E0322 02:52:13.924110       1 controller.go:272] Error syncing PVC: resize volume &quot;pvc-176dd919-6a5c-46c5-9a48-82f642d34ead&quot; by resizer &quot;rook-ceph.cephfs.csi.ceph.com&quot; failed: rpc error: code &#x3D; InvalidArgument desc &#x3D; provided secret is empty</span><br><span class="line">I0322 02:52:13.924170       1 event.go:282] Event(v1.ObjectReference&#123;Kind:&quot;PersistentVolumeClaim&quot;, Namespace:&quot;rook-ceph&quot;, Name:&quot;cephfs-pvc&quot;, UID:&quot;176dd919-6a5c-46c5-9a48-82f642d34ead&quot;, APIVersion:&quot;v1&quot;, ResourceVersion:&quot;442928655&quot;, FieldPath:&quot;&quot;&#125;): type: &#39;Warning&#39; reason: &#39;VolumeResizeFailed&#39; resize volume &quot;pvc-176dd919-6a5c-46c5-9a48-82f642d34ead&quot; by resizer &quot;rook-ceph.cephfs.csi.ceph.com&quot; failed: rpc error: code &#x3D; InvalidArgument desc &#x3D; provided secret is empty</span><br><span class="line">I0322 02:52:13.924208       1 controller.go:281] Started PVC processing &quot;rook-ceph&#x2F;cephfs-pvc&quot;</span><br><span class="line">I0322 02:52:13.928205       1 connection.go:182] GRPC call: &#x2F;csi.v1.Controller&#x2F;ControllerExpandVolume</span><br><span class="line">I0322 02:52:13.928231       1 connection.go:183] GRPC request: &#123;&quot;capacity_range&quot;:&#123;&quot;required_bytes&quot;:2147483648&#125;,&quot;volume_capability&quot;:&#123;&quot;AccessType&quot;:&#123;&quot;Mount&quot;:&#123;&#125;&#125;,&quot;access_mode&quot;:&#123;&quot;mode&quot;:1&#125;&#125;,&quot;volume_id&quot;:&quot;0001-0009-rook-ceph-0000000000000001-c512defd-87b4-11eb-bcbd-26ec2e544591&quot;&#125;</span><br><span class="line">I0322 02:52:13.928325       1 event.go:282] Event(v1.ObjectReference&#123;Kind:&quot;PersistentVolumeClaim&quot;, Namespace:&quot;rook-ceph&quot;, Name:&quot;cephfs-pvc&quot;, UID:&quot;176dd919-6a5c-46c5-9a48-82f642d34ead&quot;, APIVersion:&quot;v1&quot;, ResourceVersion:&quot;442928655&quot;, FieldPath:&quot;&quot;&#125;): type: &#39;Normal&#39; reason: &#39;Resizing&#39; External resizer is resizing volume pvc-176dd919-6a5c-46c5-9a48-82f642d34ead</span><br><span class="line">I0322 02:52:13.929327       1 connection.go:185] GRPC response: &#123;&#125;</span><br><span class="line">I0322 02:52:13.929370       1 connection.go:186] GRPC error: rpc error: code &#x3D; InvalidArgument desc &#x3D; provided secret is empty</span><br><span class="line">E0322 02:52:13.929430       1 controller.go:272] Error syncing PVC: resize volume &quot;pvc-176dd919-6a5c-46c5-9a48-82f642d34ead&quot; by resizer &quot;rook-ceph.cephfs.csi.ceph.com&quot; failed: rpc error: code &#x3D; InvalidArgument desc &#x3D; provided secret is empty</span><br><span class="line">I0322 02:52:13.929502       1 event.go:282] Event(v1.ObjectReference&#123;Kind:&quot;PersistentVolumeClaim&quot;, Namespace:&quot;rook-ceph&quot;, Name:&quot;cephfs-pvc&quot;, UID:&quot;176dd919-6a5c-46c5-9a48-82f642d34ead&quot;, APIVersion:&quot;v1&quot;, ResourceVersion:&quot;442928655&quot;, FieldPath:&quot;&quot;&#125;): type: &#39;Warning&#39; reason: &#39;VolumeResizeFailed&#39; resize volume &quot;pvc-176dd919-6a5c-46c5-9a48-82f642d34ead&quot; by resizer &quot;rook-ceph.cephfs.csi.ceph.com&quot; failed: rpc error: code &#x3D; InvalidArgument desc &#x3D; provided secret is empty</span><br></pre></td></tr></table></figure>
+
+
+<h4 id="问题定位"><a href="#问题定位" class="headerlink" title="问题定位"></a>问题定位</h4><p>日志中记录报错发生在 connection.go 文件中，定位到报错日志对应的代码：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line">&#x2F;&#x2F; resizeVolume resize the volume to request size, and update PV&#39;s capacity if succeeded.</span><br><span class="line">func (ctrl *resizeController) resizeVolume(</span><br><span class="line">    pvc *v1.PersistentVolumeClaim,</span><br><span class="line">    pv *v1.PersistentVolume) (resource.Quantity, bool, error) &#123;</span><br><span class="line"></span><br><span class="line">    &#x2F;&#x2F; before trying expansion we will remove the PVC from map</span><br><span class="line">    &#x2F;&#x2F; that tracks PVCs which can&#39;t be expanded when in-use. If</span><br><span class="line">    &#x2F;&#x2F; pvc indeed can not be expanded when in-use then it will be added</span><br><span class="line">    &#x2F;&#x2F; back when expansion fails with in-use error.</span><br><span class="line">    ctrl.usedPVCs.removePVCWithInUseError(pvc)</span><br><span class="line"></span><br><span class="line">    requestSize :&#x3D; pvc.Spec.Resources.Requests[v1.ResourceStorage]</span><br><span class="line"></span><br><span class="line">    newSize, fsResizeRequired, err :&#x3D; ctrl.resizer.Resize(pv, requestSize)</span><br><span class="line"></span><br><span class="line">    if err !&#x3D; nil &#123;</span><br><span class="line">        &#x2F;&#x2F; if this error was a in-use error then it must be tracked so as we don&#39;t retry without</span><br><span class="line">        &#x2F;&#x2F; first verifying if volume is in-use</span><br><span class="line">        if inUseError(err) &#123;</span><br><span class="line">            ctrl.usedPVCs.addPVCWithInUseError(pvc)</span><br><span class="line">        &#125;</span><br><span class="line">        return newSize, fsResizeRequired, fmt.Errorf(&quot;resize volume %q by resizer %q failed: %v&quot;, pv.Name, ctrl.name, err)</span><br><span class="line">    &#125;</span><br><span class="line">    klog.V(4).Infof(&quot;Resize volume succeeded for volume %q, start to update PV&#39;s capacity&quot;, pv.Name)</span><br><span class="line"></span><br><span class="line">    err &#x3D; ctrl.updatePVCapacity(pv, newSize)</span><br><span class="line">    if err !&#x3D; nil &#123;</span><br><span class="line">        return newSize, fsResizeRequired, err</span><br><span class="line">    &#125;</span><br><span class="line">    klog.V(4).Infof(&quot;Update capacity of PV %q to %s succeeded&quot;, pv.Name, newSize.String())</span><br><span class="line"></span><br><span class="line">    return newSize, fsResizeRequired, nil</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>resizeVolume 方法用于更新 pv 的大小，可以看到在调用 ctrl.resizer.Resize 方法时出现了错误导致报错。进一步查看 Resize 方法，结合 <code>provided secret is empty</code> 的报错，发现错误发生在如下这个地方。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">func (r *csiResizer) Resize(pv *v1.PersistentVolume, requestSize resource.Quantity) (resource.Quantity, bool, error) &#123;</span><br><span class="line">    ···</span><br><span class="line"></span><br><span class="line">    var secrets map[string]string</span><br><span class="line">    secreRef :&#x3D; source.ControllerExpandSecretRef</span><br><span class="line">    if secreRef !&#x3D; nil &#123;</span><br><span class="line">        var err error</span><br><span class="line">        secrets, err &#x3D; getCredentials(r.k8sClient, secreRef)</span><br><span class="line">        if err !&#x3D; nil &#123;</span><br><span class="line">            return oldSize, false, err</span><br><span class="line">        &#125;</span><br><span class="line">     &#125;</span><br><span class="line"></span><br><span class="line">    ···</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>上述代码逻辑是：首先获取 pv 资源中的 ControllerExpandSecretRef 这个字段，根据方法名断定这个字段定义了 Secret 的信息，但是没有找到对应的 Secret 因此报错。SecretReference 结构体如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">type SecretReference struct &#123;</span><br><span class="line">    &#x2F;&#x2F; Name is unique within a namespace to reference a secret resource.</span><br><span class="line">    &#x2F;&#x2F; +optional</span><br><span class="line">    Name string &#96;json:&quot;name,omitempty&quot; protobuf:&quot;bytes,1,opt,name&#x3D;name&quot;&#96;</span><br><span class="line">    &#x2F;&#x2F; Namespace defines the space within which the secret name must be unique.</span><br><span class="line">    &#x2F;&#x2F; +optional</span><br><span class="line">    Namespace string &#96;json:&quot;namespace,omitempty&quot; </span><br></pre></td></tr></table></figure>
+<p>SecretReference 结构体中定义了 Secret 的 Namespace 和 Name。<br>定位到了问题代码，下面进一步确定为什么 pv 的 ControllerExpandSecretRef 字段中没有 Secret 的信息。</p>
+<p>查看 pv 的详细信息发现 pv 中没有 ControllerExpandSecretRef 这个字段，但是有个相似的 nodeStageSecretRef 字段。</p>
+<h4 id="解决过程"><a href="#解决过程" class="headerlink" title="解决过程"></a>解决过程</h4><ol>
+<li><p>首先尝试修改 pv 的资源定义文件，增加 SecretReference 字段。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"># kubectl patch pv pvc-176dd919-6a5c-46c5-9a48-82f642d34ead -o jsonpath&#x3D;&#39;&#123;.spec.volumeName&#125;&#39; --patch &#39;&#123;&quot;spec&quot;:&#123;&quot;csi&quot;:&#123;&quot;controllerExpandSecretRef&quot;:&#123;&quot;name&quot;:&quot;rook-csi-cephfs-provisioner&quot;,&quot;namespace&quot;:&quot;rook-ceph&quot;&#125;&#125;&#125;&#125;&#39;</span><br></pre></td></tr></table></figure>
+<p>发现操作无果，执行命令不报错也未生效。</p>
+</li>
+<li><p>网上有提到需要 kubelet 开启 <code>--feature-gates &quot;ExpandCSIVolumes=true&quot;</code> 这个参数，该参数在 1.16 版本才默认启用，1.16 以前需手动开启, 而我们的版本刚好是1.15, 测试发现并无效果。</p>
+</li>
+</ol>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line">spec:</span><br><span class="line">  accessModes:</span><br><span class="line">  - ReadWriteOnce</span><br><span class="line">  capacity:</span><br><span class="line">    storage: 3Gi</span><br><span class="line">  claimRef:</span><br><span class="line">    apiVersion: v1</span><br><span class="line">    kind: PersistentVolumeClaim</span><br><span class="line">    name: cephfs-pvc</span><br><span class="line">    namespace: rook-ceph</span><br><span class="line">    resourceVersion: &quot;438654796&quot;</span><br><span class="line">    uid: 176dd919-6a5c-46c5-9a48-82f642d34ead</span><br><span class="line">  csi:</span><br><span class="line">    driver: rook-ceph.cephfs.csi.ceph.com</span><br><span class="line">    nodeStageSecretRef:</span><br><span class="line">      name: rook-csi-cephfs-node</span><br><span class="line">      namespace: rook-ceph</span><br><span class="line">    volumeAttributes:</span><br><span class="line">      clusterID: rook-ceph</span><br><span class="line">      fsName: myfs</span><br><span class="line">      pool: myfs-data0</span><br><span class="line">      storage.kubernetes.io&#x2F;csiProvisionerIdentity: 1615980051642-8081-rook-ceph.cephfs.csi.ceph.com</span><br><span class="line">      subvolumeName: csi-vol-c512defd-87b4-11eb-bcbd-26ec2e544591</span><br><span class="line">    volumeHandle: 0001-0009-rook-ceph-0000000000000001-c512defd-87b4-11eb-bcbd-26ec2e544591</span><br><span class="line">  persistentVolumeReclaimPolicy: Retain</span><br><span class="line">  storageClassName: rook-cephfs</span><br><span class="line">  volumeMode: Filesystem</span><br></pre></td></tr></table></figure>
+<ol start="3">
+<li>各种方法无效，最终决定修改代码自己编译一个镜像。修改 csi-resizer.go 代码, 不再获取 SecretReference 字段，而是在代码中定义其结构体内容。<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">secreRef :&#x3D; &amp;v1.SecretReference&#123;</span><br><span class="line">    Namespace: &quot;rook-ceph&quot;,</span><br><span class="line">    Name: &quot;rook-csi-cephfs-provisioner&quot;,</span><br><span class="line">&#125;</span><br><span class="line">    </span><br><span class="line">secrets, err :&#x3D; getCredentials(r.k8sClient, secreRef)</span><br><span class="line">if err !&#x3D; nil &#123;</span><br><span class="line">    return oldSize, false, err</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+修改完后编译制作镜像，将新镜像替换后测试扩容功能可用。扩容成功的日志如下：<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">I0322 02:26:46.445966       1 event.go:282] Event(v1.ObjectReference&#123;Kind:&quot;PersistentVolumeClaim&quot;, Namespace:&quot;rook-ceph&quot;, Name:&quot;cephfs-pvc&quot;, UID:&quot;6d947adc-99b8-491d-9918-2df162b9e18c&quot;, APIVersion:&quot;v1&quot;, ResourceVersion:&quot;11769690&quot;, FieldPath:&quot;&quot;&#125;): type: &#39;Normal&#39; reason: &#39;VolumeResizeSuccessful&#39; Resize volume succeeded</span><br><span class="line">I0322 02:27:55.123523       1 controller.go:281] Started PVC processing &quot;rook-ceph&#x2F;cephfs-pvc&quot;</span><br><span class="line">I0322 02:27:55.129411       1 event.go:282] Event(v1.ObjectReference&#123;Kind:&quot;PersistentVolumeClaim&quot;, Namespace:&quot;rook-ceph&quot;, Name:&quot;cephfs-pvc&quot;, UID:&quot;6d947adc-99b8-491d-9918-2df162b9e18c&quot;, APIVersion:&quot;v1&quot;, ResourceVersion:&quot;11769899&quot;, FieldPath:&quot;&quot;&#125;): type: &#39;Normal&#39; reason: &#39;Resizing&#39; External resizer is resizing volume pvc-6d947adc-99b8-491d-9918-2df162b9e18c</span><br></pre></td></tr></table></figure></li>
+</ol>
+<p><strong>注意：这仅仅是临时解决方案，测试环境玩一玩还可以，生产环境万万使不得。</strong></p>
+<h4 id="问题总结"><a href="#问题总结" class="headerlink" title="问题总结"></a>问题总结</h4><p>出现该问题的根本原因是 csi provisioner 插件需要 k8s 1.16 以上版本使用，而我们的集群版本为 1.15。 </p>
+
+    </div>
+
+    
+    
+    
+        <div class="reward-container">
+  <div>请作者喝咖啡！</div>
+  <button onclick="var qr = document.getElementById('qr'); qr.style.display = (qr.style.display === 'none') ? 'block' : 'none';">
+    Donate
+  </button>
+  <div id="qr" style="display: none;">
+      
+      <div style="display: inline-block;">
+        <img src="/images/wchat.png" alt="木子 WeChat Pay">
+        <p>WeChat Pay</p>
+      </div>
+
+  </div>
+</div>
+
+        
+
+<div>
+<ul class="post-copyright">
+  <li class="post-copyright-author">
+    <strong>Post author:  </strong>木子
+  </li>
+  <li class="post-copyright-link">
+    <strong>Post link: </strong>
+    <a href="https://lyj7890.github.io/2021/04/16/23-05-50/" title="rook-ceph集群中cephfs无法扩容">https://lyj7890.github.io/2021/04/16/23-05-50/</a>
+  </li>
+  <li class="post-copyright-license">
+    <strong>Copyright Notice:  </strong>All articles in this blog are licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" rel="noopener" target="_blank"><i class="fab fa-fw fa-creative-commons"></i>BY-NC-SA</a> unless stating additionally.
+  </li>
+</ul>
+</div>
+
+
+      <footer class="post-footer">
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2021/03/15/23-28-27/" rel="prev" title="软链接的创建与删除">
+      <i class="fa fa-chevron-left"></i> 软链接的创建与删除
+    </a></div>
+      <div class="post-nav-item"></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E9%97%AE%E9%A2%98%E7%8E%B0%E8%B1%A1"><span class="nav-number">1.</span> <span class="nav-text">问题现象</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E9%97%AE%E9%A2%98%E5%AE%9A%E4%BD%8D"><span class="nav-number">2.</span> <span class="nav-text">问题定位</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E8%A7%A3%E5%86%B3%E8%BF%87%E7%A8%8B"><span class="nav-number">3.</span> <span class="nav-text">解决过程</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E9%97%AE%E9%A2%98%E6%80%BB%E7%BB%93"><span class="nav-number">4.</span> <span class="nav-text">问题总结</span></a></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="木子"
+      src="/images/avatar.gif">
+  <p class="site-author-name" itemprop="name">木子</p>
+  <div class="site-description" itemprop="description">DevOpser，enjoy</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">9</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-tags">
+        <span class="site-state-item-count">1</span>
+        <span class="site-state-item-name">tags</span>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/lyj7890" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;lyj7890" rel="noopener" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+  </div>
+  <div class="cc-license motion-element" itemprop="license">
+    <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" class="cc-opacity" rel="noopener" target="_blank"><img src="/images/cc-by-nc-sa.svg" alt="Creative Commons"></a>
+  </div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2021</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">木子</span>
+</div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/muse.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>
